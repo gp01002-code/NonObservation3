@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-  <title>SELF_OBSERVER :: v61.0 RESPONSIVE_DELICATE_ARCHIVE</title>
+  <title>SELF_OBSERVER :: v63.0 CYCLE_CONTROL_ARCHIVE</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,6 @@
       background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.95) 100%);
     }
 
-    /* 物理互動光環：反應變快 */
     #cur {
       position:fixed; width:50px; height:50px; border:1px dashed rgba(255,255,255,0.3); border-radius:50%;
       z-index:700; pointer-events:none; transform:translate(-50%,-50%);
@@ -52,7 +51,7 @@
     #mc { position:absolute; bottom:20px; left:20px; opacity:0; pointer-events:none; }
     
     #log-box{flex:1; font-size:9px; color:rgba(255,255,255,0.7); overflow-y:auto; line-height:1.6;}
-    #scan-status { font-size: 10px; color: #fff; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.3); padding-top: 10px; }
+    #scan-status { font-size: 10px; color: #fff; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.3); padding-top: 10px; line-height: 1.8;}
 
     #controls{
       position:fixed; right:30px; bottom:30px; z-index:950;
@@ -75,6 +74,12 @@
       color:rgba(255,255,255,0.3); letter-spacing:1px; z-index: 800;
     }
 
+    @media (max-width: 768px) {
+      #sidebar { display: none; }
+      #status-bar { left: 20px; }
+      #controls { right: 20px; bottom: 20px; transform: scale(0.8); transform-origin: bottom right; }
+    }
+
     #loading-overlay {
       position: fixed; inset: 0; background: #000; z-index: 2000;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -87,8 +92,8 @@
 <body>
 
 <div id="loading-overlay">
-  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_RESPONSIVE_ENGINE...</div>
-  <div id="load-status" class="text-[10px] text-gray-500 font-mono">CALIBRATING_SENSITIVITY</div>
+  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_CYCLE_ENGINE...</div>
+  <div id="load-status" class="text-[10px] text-gray-500 font-mono">CALIBRATING_STACK_LIMITS</div>
 </div>
 
 <div id="crt"></div>
@@ -101,6 +106,7 @@
     <video id="video" playsinline muted autoplay></video>
     <canvas id="mc" width="100" height="75"></canvas>
     <div id="scan-status">
+      CYCLE_LAYER: <span id="ui-cycle" style="color:#0f0">1 / 5</span><br>
       ACTIVE_STACKS: <span id="ui-progress">0</span><br>
       SCATTERED_DEBRIS: <span id="ui-scattered">0</span><br>
       MODE: <span id="ui-mode">WAITING</span>
@@ -118,19 +124,23 @@
     <div class="knob" id="knob-speed"><div class="needle" id="needle-speed"></div></div>
   </div>
   <div class="knob-wrap">
+    <span class="label">PROCESS</span>
+    <button id="btn-pause" class="w-14 h-14 border border-[#0f0] text-[#0f0] hover:bg-[#0f0] hover:text-black transition-all text-[9px] font-bold tracking-widest shadow-[0_5px_10px_rgba(0,255,0,0.1)]">PAUSE</button>
+  </div>
+  <div class="knob-wrap">
     <span class="label">CLEAR_DESK</span>
     <button id="btn-wipe" class="w-14 h-14 border border-white text-white hover:bg-white hover:text-black transition-all text-[9px] font-bold tracking-widest shadow-[0_5px_10px_rgba(0,0,0,0.5)]">RST</button>
   </div>
 </div>
 
-<div id="status-bar">v61.0_RESPONSIVE_DELICATE_ARCHIVE // OPTIMIZED_KINETICS</div>
+<div id="status-bar">v63.0_CYCLE_CONTROL // AUTO-PURGE_AT_LAYER_5 // INVESTIGATION_MODE_READY</div>
 
 <div id="container"></div>
 
 <script>
 /**
- * SELF_OBSERVER v61.0 - Responsive Delicate Archive
- * 核心優化：提升追蹤與手勢靈敏度、降低剝離門檻、稍微加快散落動畫速度。
+ * SELF_OBSERVER v63.0 - Cycle Control Archive
+ * 新增功能：5 層自動重啟機制、暫停生成按鈕 (純物理調查模式)。
  */
 
 let video, hiddenCanvas, hiddenCtx, tempCanvas, tempCtx;
@@ -139,18 +149,19 @@ let baseTiles = [];
 let cellStacks = []; 
 let blownPapers = []; 
 
-const GRID_SIZE = 12;
-const TOTAL_TILES = GRID_SIZE * GRID_SIZE; 
-const BASE_GRID_SIZE = 10; 
+const TOTAL_TILES = 144; 
+const MAX_CYCLES = 5; // 最高堆疊層數 (滿5層自動重置)
+let COLS = 12;
+let ROWS = 12;
 let currentIndex = 0;
 let currentMode = 0;
 let totalActiveLayers = 0;
 
 let speedRatio = 0.5;
+let isPaused = false; // 控制是否暫停生成
 let lastCaptureTime = 0;
 let lastTime = performance.now();
 
-// 互動與動態追蹤
 let prevFrame = null;
 const vs = { cx: window.innerWidth/2, cy: window.innerHeight/2, tx: window.innerWidth/2, ty: window.innerHeight/2 };
 let mouseVx = 0, mouseVy = 0; 
@@ -158,7 +169,8 @@ let lastMouseTime = 0;
 
 const MODE_NAMES = ["TOPOLOGICAL_EDGE", "DITHER_MATRIX", "THRESHOLD_SLICE", "NEURAL_NOISE", "QUANTIZED_PIXEL"];
 
-const paperGeo = new THREE.PlaneBufferGeometry((BASE_GRID_SIZE/GRID_SIZE)*0.80, (BASE_GRID_SIZE/GRID_SIZE)*0.80);
+const paperGeo = new THREE.PlaneBufferGeometry(1.0, 1.0);
+const baseGeo = new THREE.PlaneBufferGeometry(0.78, 0.78);
 
 const updateMouse = (x, y) => {
   lastMouseTime = Date.now();
@@ -174,23 +186,31 @@ window.addEventListener('touchmove', e => {
   updateMouse(e.touches[0].clientX, e.touches[0].clientY);
 }, {passive: false});
 
-// 閒置 0.5 秒就取消游標的啟動狀態 (比上一版快)
 setInterval(() => {
   if(Date.now() - lastMouseTime > 500) document.getElementById('cur').classList.remove('active');
 }, 500);
 
+function calculateGridLayout() {
+  const aspect = window.innerWidth / window.innerHeight;
+  const clampedAspect = Math.max(0.4, Math.min(2.5, aspect));
+  COLS = Math.max(1, Math.round(Math.sqrt(TOTAL_TILES * clampedAspect)));
+  ROWS = Math.ceil(TOTAL_TILES / COLS);
+}
+
 async function init() {
   video = document.getElementById('video');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 640 } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 640 }, audio: false });
     video.srcObject = stream;
     await video.play();
   } catch (e) {
     addLog("CAMERA_ERROR: " + e.message, "rgba(255,100,100,0.8)");
   }
 
+  calculateGridLayout();
+
   hiddenCanvas = document.createElement('canvas');
-  hiddenCanvas.width = 128; hiddenCanvas.height = 128;
+  hiddenCanvas.width = 160; hiddenCanvas.height = 160;
   hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
 
   tempCanvas = document.createElement('canvas');
@@ -205,8 +225,7 @@ async function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = false; 
   document.getElementById('container').appendChild(renderer.domElement);
 
   setupLighting();
@@ -216,28 +235,23 @@ async function init() {
   document.getElementById('loading-overlay').style.opacity = '0';
   setTimeout(() => document.getElementById('loading-overlay').remove(), 1000);
 
-  addLog("RESPONSIVE_PHYSICS_ENGINE INITIALIZED", "#fff");
-  addLog("AWAITING_INTERVENTION...");
+  addLog("CYCLE_CONTROL INITIALIZED", "#fff");
   
   animate();
 }
 
 function setupLighting() {
-  const ambientLight = new THREE.AmbientLight(0x404040, 1.2); 
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); 
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); 
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
   dirLight.position.set(3, 10, 15);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
   scene.add(dirLight);
 
   const wallGeo = new THREE.PlaneGeometry(100, 100);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8, metalness: 0.2 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8 });
   const wall = new THREE.Mesh(wallGeo, wallMat);
   wall.position.z = -1; 
-  wall.receiveShadow = true;
   scene.add(wall);
 }
 
@@ -246,63 +260,77 @@ function fitGridToScreen() {
   const vFov = camera.fov * Math.PI / 180;
   const vHeight = 2 * Math.tan(vFov / 2) * camera.position.z;
   const vWidth = vHeight * camera.aspect;
-  const targetSize = Math.min(vWidth, vHeight) * 0.85;
-  const scale = targetSize / BASE_GRID_SIZE;
+  
+  const gridWidth = COLS * 1.0; 
+  const gridHeight = ROWS * 1.0;
+
+  const margin = window.innerWidth < 768 ? 0.95 : 0.85;
+  const scaleX = (vWidth * margin) / gridWidth;
+  const scaleY = (vHeight * margin) / gridHeight;
+  const scale = Math.min(scaleX, scaleY);
+  
   mosaicGroup.scale.set(scale, scale, 1);
 }
 
 function createBaseGrid() {
   mosaicGroup = new THREE.Group();
-  const step = BASE_GRID_SIZE / GRID_SIZE; 
+  const step = 1.0; 
+  const startX = -(COLS - 1) * step / 2;
+  const startY = (ROWS - 1) * step / 2;
 
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x0a0a0a, roughness: 1.0, side: THREE.DoubleSide
-      });
-      const mesh = new THREE.Mesh(paperGeo, mat);
-      
-      const baseX = (x - GRID_SIZE / 2 + 0.5) * step;
-      const baseY = (GRID_SIZE / 2 - y - 0.5) * step;
-      
-      mesh.position.set(baseX, baseY, 0);
-      mesh.receiveShadow = true;
+  for (let i = 0; i < TOTAL_TILES; i++) {
+    const x = i % COLS;
+    const y = Math.floor(i / COLS);
 
-      baseTiles.push({
-        x: baseX, y: baseY, z: 0,
-        gridX: x, gridY: y,
-        windCharge: 0
-      });
-      
-      cellStacks.push([]); 
-      mosaicGroup.add(mesh);
-    }
+    const mat = new THREE.MeshBasicMaterial({ color: 0x080808 });
+    const mesh = new THREE.Mesh(baseGeo, mat);
+    
+    const baseX = startX + x * step;
+    const baseY = startY - y * step;
+    
+    mesh.position.set(baseX, baseY, 0);
+
+    baseTiles.push({
+      x: baseX, y: baseY, z: 0,
+      gridX: x, gridY: y,
+      windCharge: 0
+    });
+    
+    cellStacks.push([]); 
+    mosaicGroup.add(mesh);
   }
   scene.add(mosaicGroup);
 }
 
 function createPaperTexture(processedImageData, isBlank) {
-  if (isBlank) {
-    hiddenCtx.fillStyle = '#999999'; 
-    hiddenCtx.fillRect(0, 0, 128, 128);
-    for(let i=0; i<400; i++) {
-      hiddenCtx.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
-      hiddenCtx.fillRect(Math.random()*128, Math.random()*128, 2, 2);
-    }
-  } else {
-    hiddenCtx.fillStyle = '#f2f2f2'; 
-    hiddenCtx.fillRect(0, 0, 128, 128);
-    for(let i=0; i<300; i++) {
-      hiddenCtx.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
-      hiddenCtx.fillRect(Math.random()*128, Math.random()*128, 2, 2);
-    }
+  hiddenCtx.clearRect(0, 0, 160, 160);
+
+  hiddenCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+  hiddenCtx.shadowBlur = 12;
+  hiddenCtx.shadowOffsetX = 3;
+  hiddenCtx.shadowOffsetY = 6;
+  
+  hiddenCtx.fillStyle = isBlank ? '#999999' : '#f2f2f2';
+  hiddenCtx.fillRect(10, 10, 128, 128);
+
+  hiddenCtx.shadowColor = 'transparent';
+
+  for(let i=0; i<300; i++) {
+    hiddenCtx.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
+    hiddenCtx.fillRect(10 + Math.random()*128, 10 + Math.random()*128, 2, 2);
+  }
+
+  if (!isBlank) {
     tempCtx.putImageData(processedImageData, 0, 0);
-    hiddenCtx.drawImage(tempCanvas, 10, 10, 108, 108);
+    hiddenCtx.drawImage(tempCanvas, 20, 20, 108, 108);
   }
 
   hiddenCtx.save();
-  hiddenCtx.translate(64, 8); 
+  hiddenCtx.translate(74, 18); 
   hiddenCtx.rotate((Math.random() - 0.5) * 0.3); 
+  hiddenCtx.shadowColor = 'rgba(0,0,0,0.4)';
+  hiddenCtx.shadowBlur = 4;
+  hiddenCtx.shadowOffsetY = 2;
   hiddenCtx.fillStyle = 'rgba(235, 230, 190, 0.8)'; 
   hiddenCtx.fillRect(-20, -8, 40, 14);
   hiddenCtx.restore();
@@ -315,18 +343,24 @@ function createPaperTexture(processedImageData, isBlank) {
 function captureNextSector() {
   if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+  // 自動重啟機制：如果已經印滿 5 層 (5 * 144 張)，就自動清除並從頭開始
+  if (currentIndex >= TOTAL_TILES * MAX_CYCLES) {
+    addLog(`MAX_CAPACITY (${MAX_CYCLES}_LAYERS) REACHED. AUTO-PURGING.`, "#f00");
+    wipeBoard();
+    return;
+  }
+
   const cellIndex = currentIndex % TOTAL_TILES;
   const cell = baseTiles[cellIndex];
   const stack = cellStacks[cellIndex];
 
+  // 雖然5層自動清空，但若單格有異常堆積還是作保險清理
   if (stack.length >= 6) {
     const old = stack.shift();
     totalActiveLayers--;
-    
-    // 將多餘舊紙張淘汰到散落區
-    old.userData.vx = (Math.random()-0.5)*0.04;
-    old.userData.vy = (Math.random()-0.5)*0.04;
-    old.userData.vz = 0.08;
+    old.userData.vx = (Math.random()-0.5)*0.03;
+    old.userData.vy = (Math.random()-0.5)*0.03;
+    old.userData.vz = 0.05;
     blownPapers.push(old);
   }
 
@@ -375,24 +409,21 @@ function captureNextSector() {
   }
 
   const paperTex = createPaperTexture(imgData, isBlankAnomaly);
-  const mat = new THREE.MeshStandardMaterial({ map: paperTex, color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide });
+  const mat = new THREE.MeshBasicMaterial({ map: paperTex, transparent: true, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(paperGeo, mat);
   
-  const offsetX = (Math.random() - 0.5) * 0.18;
-  const offsetY = (Math.random() - 0.5) * 0.18;
-  const tiltZ = (Math.random() - 0.5) * 0.3; 
-  const zOffset = (stack.length + 1) * 0.12; 
+  const offsetX = (Math.random() - 0.5) * 0.15;
+  const offsetY = (Math.random() - 0.5) * 0.15;
+  const tiltZ = (Math.random() - 0.5) * 0.25; 
+  const zOffset = (stack.length + 1) * 0.05; 
 
   mesh.position.set(cell.x + offsetX, cell.y + offsetY, cell.z + zOffset);
   mesh.rotation.z = tiltZ;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
 
   mesh.userData = {
     baseX: mesh.position.x, baseY: mesh.position.y, baseZ: mesh.position.z, baseTilt: tiltZ,
     targetRotX: 0, targetZ: mesh.position.z, targetRotY: 0,
-    noiseSeed: Math.random() * 100,
-    stackIndex: stack.length
+    noiseSeed: Math.random() * 100
   };
 
   mesh.rotation.x = Math.PI; 
@@ -401,7 +432,11 @@ function captureNextSector() {
   mosaicGroup.add(mesh);
   stack.push(mesh);
   totalActiveLayers++;
+  currentIndex++;
 
+  // 更新 UI
+  const currentCycle = Math.floor((currentIndex - 1) / TOTAL_TILES) + 1;
+  document.getElementById('ui-cycle').innerText = `${currentCycle} / ${MAX_CYCLES}`;
   document.getElementById('ui-progress').innerText = totalActiveLayers;
   
   if (isBlankAnomaly) {
@@ -410,10 +445,9 @@ function captureNextSector() {
     document.getElementById('ui-mode').innerText = MODE_NAMES[currentMode];
     currentMode = (currentMode + 1) % 5;
   }
-  
-  currentIndex++;
 }
 
+// 淨空桌面並重新開始
 function wipeBoard() {
   cellStacks.forEach(stack => {
     stack.forEach(p => {
@@ -429,8 +463,17 @@ function wipeBoard() {
     p.material.dispose();
   });
   blownPapers.length = 0;
+  
+  // 重置計數器
   totalActiveLayers = 0;
-  addLog("DESK_CLEARED.", "#f00");
+  currentIndex = 0;
+  currentMode = 0;
+  
+  document.getElementById('ui-cycle').innerText = `1 / ${MAX_CYCLES}`;
+  document.getElementById('ui-progress').innerText = "0";
+  document.getElementById('ui-scattered').innerText = "0";
+  
+  addLog("DESK_CLEARED. STARTING_NEW_CYCLE.", "#f00");
 }
 
 function animate() {
@@ -442,12 +485,13 @@ function animate() {
   
   const interval = 80 + (1 - speedRatio) * 600; 
 
-  if (Date.now() - lastCaptureTime > interval) {
+  // 如果沒有暫停，才繼續抓取新照片
+  if (!isPaused && Date.now() - lastCaptureTime > interval) {
     captureNextSector();
     lastCaptureTime = Date.now();
   }
 
-  // 1. 動態追蹤：縮短攝影機接管的延遲，只要手/滑鼠離開 1 秒就啟動
+  // 1. 動態追蹤
   if (Date.now() - lastMouseTime > 1000) {
     const c = document.getElementById('mc');
     if(video && video.readyState >= 2){
@@ -459,7 +503,6 @@ function animate() {
         let tx=0, ty=0, count=0;
         for(let i=0; i<curr.data.length; i+=4){
           const diff = (Math.abs(curr.data[i]-prevFrame.data[i]) + Math.abs(curr.data[i+1]-prevFrame.data[i+1]) + Math.abs(curr.data[i+2]-prevFrame.data[i+2]))/3;
-          // 增加對身體微小動作的靈敏度
           if(diff > 30){ 
             const idx = i/4; 
             tx += idx % c.width; ty += Math.floor(idx / c.width); 
@@ -480,30 +523,32 @@ function animate() {
     }
   }
 
-  // 光環座標平滑化：加快跟隨速度 (0.15)
   vs.cx += (vs.tx - vs.cx) * 0.15;
   vs.cy += (vs.ty - vs.cy) * 0.15;
   document.getElementById('cur').style.left = vs.cx + 'px';
   document.getElementById('cur').style.top = vs.cy + 'px';
 
   let currentCursorVel = Math.sqrt(mouseVx*mouseVx + mouseVy*mouseVy);
-  mouseVx *= 0.7; // 稍微保留滑動的慣性
+  mouseVx *= 0.7; 
   mouseVy *= 0.7;
 
+  // 映射座標至 3D 空間
   const vFov = camera.fov * Math.PI / 180;
   const vHeight = 2 * Math.tan(vFov / 2) * camera.position.z;
   const vWidth = vHeight * camera.aspect;
-  const targetSize = Math.min(vWidth, vHeight) * 0.85;
-  const scale = targetSize / BASE_GRID_SIZE;
+  
+  const margin = window.innerWidth < 768 ? 0.95 : 0.85;
+  const scaleX = (vWidth * margin) / COLS;
+  const scaleY = (vHeight * margin) / ROWS;
+  const scale = Math.min(scaleX, scaleY);
 
   const wx = (((vs.cx / window.innerWidth) * 2 - 1) * (vWidth / 2)) / scale;
   const wy = (-((vs.cy / window.innerHeight) * 2 - 1) * (vHeight / 2)) / scale;
   
   const blowRadius = 2.0; 
-  // 大幅降低門檻：只要累積 0.8 單位就能剝開，讓反應變得順暢
   const PEEL_THRESHOLD = 0.8; 
 
-  // 2. 靈敏但輕柔的掀紙引擎
+  // 輕柔掀紙引擎 (即使系統暫停生成，物理引擎依然運作！)
   for(let i=0; i<TOTAL_TILES; i++) {
     const cell = baseTiles[i];
     const stack = cellStacks[i];
@@ -515,7 +560,6 @@ function animate() {
       const dist = Math.sqrt(dx*dx + dy*dy);
       
       if (dist < blowRadius) {
-        // 放寬對移動速度的懲罰：即使手在微微滑動，依然可以累積掀開的能量
         let hoverStability = Math.max(0.2, 1.0 - currentCursorVel * 0.05);
         cell.windCharge += delta * hoverStability * (1.5 - dist/blowRadius);
       } else {
@@ -524,7 +568,6 @@ function animate() {
 
       const chargeRatio = Math.min(1, cell.windCharge / PEEL_THRESHOLD);
 
-      // 顫動預兆
       if (chargeRatio > 0 && chargeRatio < 1.0) {
         topPaper.userData.targetZ = topPaper.userData.baseZ + chargeRatio * 0.2;
         topPaper.userData.targetRotX = Math.sin(time * 25 + topPaper.userData.noiseSeed) * 0.08 * chargeRatio;
@@ -533,20 +576,19 @@ function animate() {
         topPaper.userData.targetRotX = 0;
       }
 
-      // --- 突破臨界：順暢剝離 ---
+      // 掀開並輕柔散落在原位附近
       if (cell.windCharge >= PEEL_THRESHOLD) {
         stack.pop(); 
         totalActiveLayers--;
         document.getElementById('ui-progress').innerText = totalActiveLayers;
 
-        // 稍微增強推出去的力道，讓它確實離開主疊，掉到旁邊
-        topPaper.userData.vx = -(dx / dist) * 0.025 + (Math.random()-0.5)*0.02;
-        topPaper.userData.vy = -(dy / dist) * 0.025 + (Math.random()-0.5)*0.02;
-        topPaper.userData.vz = 0.08; // 微微彈起
+        topPaper.userData.vx = -(dx / dist) * 0.02 + (Math.random()-0.5)*0.015;
+        topPaper.userData.vy = -(dy / dist) * 0.02 + (Math.random()-0.5)*0.015;
+        topPaper.userData.vz = 0.05; 
         
-        topPaper.userData.rvX = (Math.random() - 0.5) * 0.03; 
-        topPaper.userData.rvY = (Math.random() - 0.5) * 0.03;
-        topPaper.userData.rvZ = (Math.random() - 0.5) * 0.08;
+        topPaper.userData.rvX = (Math.random() - 0.5) * 0.02; 
+        topPaper.userData.rvY = (Math.random() - 0.5) * 0.02;
+        topPaper.userData.rvZ = (Math.random() - 0.5) * 0.06;
 
         blownPapers.push(topPaper);
         cell.windCharge = 0; 
@@ -565,22 +607,21 @@ function animate() {
     });
   }
 
-  // 3. 桌邊散落動態優化
+  // 散落相紙物理
   for(let i=0; i<blownPapers.length; i++) {
     const p = blownPapers[i];
     const u = p.userData;
     
-    // 稍微增加重力，讓它更快落到桌面上，不會在空中漂浮太久
-    if (p.position.z > u.baseZ - 0.2) {
-      u.vz -= 0.006; 
+    if (p.position.z > u.baseZ - 0.1) {
+      u.vz -= 0.005; 
     } else {
-      p.position.z = u.baseZ - 0.2;
+      p.position.z = u.baseZ - 0.1; 
       u.vz = 0;
-      u.vx *= 0.8; 
-      u.vy *= 0.8;
-      u.rvX *= 0.8;
-      u.rvY *= 0.8;
-      u.rvZ *= 0.85;
+      u.vx *= 0.7; 
+      u.vy *= 0.7;
+      u.rvX *= 0.7;
+      u.rvY *= 0.7;
+      u.rvZ *= 0.8;
     }
 
     p.position.x += u.vx;
@@ -591,7 +632,6 @@ function animate() {
     p.rotation.z += u.rvZ;
   }
   
-  // 維持效能上限 60 張
   document.getElementById('ui-scattered').innerText = blownPapers.length;
   if (blownPapers.length > 60) {
     const oldest = blownPapers.shift();
@@ -614,6 +654,26 @@ function addLog(m, color = "rgba(255,255,255,0.7)") {
   lb.prepend(d);
   if(lb.children.length > 25) lb.lastChild.remove();
 }
+
+// 暫停按鈕邏輯
+document.getElementById('btn-pause').onclick = () => {
+  isPaused = !isPaused;
+  const btn = document.getElementById('btn-pause');
+  
+  if (isPaused) {
+    btn.innerText = "RESUME";
+    btn.className = "w-14 h-14 border border-[#f00] text-[#f00] hover:bg-[#f00] hover:text-black transition-all text-[9px] font-bold tracking-widest shadow-[0_5px_10px_rgba(255,0,0,0.2)]";
+    addLog("GENERATION_PAUSED. INVESTIGATION_MODE_ACTIVE.", "#f00");
+    document.getElementById('ui-mode').innerText = "PAUSED_FOR_INVESTIGATION";
+    document.getElementById('ui-mode').style.color = "#f00";
+  } else {
+    btn.innerText = "PAUSE";
+    btn.className = "w-14 h-14 border border-[#0f0] text-[#0f0] hover:bg-[#0f0] hover:text-black transition-all text-[9px] font-bold tracking-widest shadow-[0_5px_10px_rgba(0,255,0,0.1)]";
+    addLog("GENERATION_RESUMED.", "#0f0");
+    document.getElementById('ui-mode').innerText = MODE_NAMES[currentMode];
+    document.getElementById('ui-mode').style.color = "#fff";
+  }
+};
 
 function setupKnob(id, callback) {
   const knob = document.getElementById(id);
