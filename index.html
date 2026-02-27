@@ -87,10 +87,21 @@
     }
 
     @media (max-width: 768px) {
-      #btn-toggle-panel { display: none; }
-      #sidebar { display: none; }
       #status-bar { left: 20px; }
-      #controls { right: 15px; bottom: 15px; }
+      #controls { right: 15px; bottom: 15px; transform: scale(0.85); transform-origin: bottom right; }
+      #sidebar { top: 60px; width: 200px; }
+    }
+
+    /* 橫式手機適配 (避免控制列超出螢幕) */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #controls {
+        flex-direction: row; /* 橫向排列 */
+        align-items: flex-end;
+        bottom: 15px;
+        right: env(safe-area-inset-right, 20px);
+        transform: scale(0.85); transform-origin: bottom right;
+      }
+      #sidebar { top: 60px; width: 200px; }
     }
 
     #loading-overlay {
@@ -149,14 +160,14 @@
   </div>
 </div>
 
-<div id="status-bar">v64.0_REFINED_DESKTOP // INVISIBLE_GRID_BASE // AUTO-PURGE_AT_LAYER_5</div>
+<div id="status-bar">v65.0_AI_SIMULACRA_ARCHIVE // CYCLE_BASED_GENERATION</div>
 
 <div id="container"></div>
 
 <script>
 /**
- * SELF_OBSERVER v64.0
- * 新增：隱藏式底板 (修復黑塊問題)、側邊欄收納邏輯、縮小化 UI 介面。
+ * SELF_OBSERVER v65.0
+ * 新增：拍立得視覺 (Polaroid Aesthetic)、AI 生成影像異步載入、隨週期遞增的 AI 覆蓋率 (純粹擬像)。
  */
 
 let video, hiddenCanvas, hiddenCtx, tempCanvas, tempCtx;
@@ -164,6 +175,17 @@ let scene, camera, renderer, mosaicGroup;
 let baseTiles = []; 
 let cellStacks = []; 
 let blownPapers = []; 
+
+// === AI 生成與提示詞庫 ===
+const AI_PROMPTS = [
+  "biometric neural scan",
+  "x-ray anatomical skull",
+  "digital ghost face",
+  "pixelated surveillance data",
+  "latent space hallucination",
+  "cybernetic tissue blueprint"
+];
+let aiImagePool = [];
 
 const TOTAL_TILES = 144; 
 const MAX_CYCLES = 5; 
@@ -185,8 +207,9 @@ let lastMouseTime = 0;
 
 const MODE_NAMES = ["TOPOLOGICAL_EDGE", "DITHER_MATRIX", "THRESHOLD_SLICE", "NEURAL_NOISE", "QUANTIZED_PIXEL"];
 
-const paperGeo = new THREE.PlaneBufferGeometry(1.0, 1.0);
-const baseGeo = new THREE.PlaneBufferGeometry(0.78, 0.78);
+// 拍立得幾何體比例 (稍微拉長)
+const paperGeo = new THREE.PlaneBufferGeometry(0.85, 0.95);
+const baseGeo = new THREE.PlaneBufferGeometry(0.7, 0.8);
 
 const updateMouse = (x, y) => {
   lastMouseTime = Date.now();
@@ -206,10 +229,26 @@ setInterval(() => {
   if(Date.now() - lastMouseTime > 500) document.getElementById('cur').classList.remove('active');
 }, 500);
 
-// 收納側邊欄邏輯
-let panelVisible = true;
-document.getElementById('btn-toggle-panel').onclick = () => {
-  panelVisible = !panelVisible;
+// 解決 iOS 手機按鈕 hover 需要點兩下的問題，並整合 Touch/Click
+function bindBtn(id, callback) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  let triggered = false;
+  const handler = (e) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+    if(triggered) return;
+    triggered = true;
+    callback();
+    setTimeout(() => triggered = false, 300);
+  };
+  el.addEventListener('touchstart', handler, {passive: false});
+  el.addEventListener('click', handler);
+}
+
+// 收納側邊欄邏輯 (手機預設收起)
+let panelVisible = window.innerWidth > 768; 
+const updatePanelUI = () => {
   const sb = document.getElementById('sidebar');
   const sbBtn = document.getElementById('btn-toggle-panel');
   const stBar = document.getElementById('status-bar');
@@ -224,9 +263,38 @@ document.getElementById('btn-toggle-panel').onclick = () => {
     sb.style.opacity = '0';
     sb.style.pointerEvents = 'none';
     sbBtn.innerText = "[+] SHOW_LOG";
-    stBar.style.transform = 'translateX(-240px)'; // 狀態列跟著往左靠
+    stBar.style.transform = window.innerWidth > 768 ? 'translateX(-240px)' : 'translateX(-10px)';
   }
 };
+updatePanelUI(); // 初始執行
+
+// 異步載入 AI 影像 (背景執行不卡頓)
+async function initAIFetcher() {
+  const fetchNext = async () => {
+    if(aiImagePool.length < 10) {
+      try {
+        const prompt = AI_PROMPTS[Math.floor(Math.random() * AI_PROMPTS.length)];
+        const seed = Math.floor(Math.random() * 99999);
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ", dark black and white, highly detailed, contrast")}?width=128&height=128&nologo=true&seed=${seed}`;
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        aiImagePool.push({ img, prompt, seed });
+      } catch(e) {}
+    }
+    setTimeout(fetchNext, 3000 + Math.random() * 3000);
+  };
+  for(let i=0; i<4; i++) fetchNext(); // 啟動4個併發抓取器
+}
+
+bindBtn('btn-toggle-panel', () => {
+  panelVisible = !panelVisible;
+  updatePanelUI();
+});
 
 function calculateGridLayout() {
   const aspect = window.innerWidth / window.innerHeight;
@@ -246,9 +314,10 @@ async function init() {
   }
 
   calculateGridLayout();
+  initAIFetcher();
 
   hiddenCanvas = document.createElement('canvas');
-  hiddenCanvas.width = 160; hiddenCanvas.height = 160;
+  hiddenCanvas.width = 160; hiddenCanvas.height = 180; // 增加高度以容納拍立得文字與陰影
   hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
 
   tempCanvas = document.createElement('canvas');
@@ -341,31 +410,52 @@ function createBaseGrid() {
   scene.add(mosaicGroup);
 }
 
-function createPaperTexture(processedImageData, isBlank) {
-  hiddenCtx.clearRect(0, 0, 160, 160);
+function createPaperTexture(processedImageData, isBlank, aiImgObj, blendRatio, cycle) {
+  hiddenCtx.clearRect(0, 0, 160, 180);
 
+  // 陰影
   hiddenCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
   hiddenCtx.shadowBlur = 12;
   hiddenCtx.shadowOffsetX = 3;
   hiddenCtx.shadowOffsetY = 6;
   
+  // 紙張底色
   hiddenCtx.fillStyle = isBlank ? '#999999' : '#f2f2f2';
-  hiddenCtx.fillRect(10, 10, 128, 128);
+  hiddenCtx.fillRect(16, 12, 128, 148);
 
   hiddenCtx.shadowColor = 'transparent';
 
+  // 紙張雜訊
   for(let i=0; i<300; i++) {
     hiddenCtx.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
-    hiddenCtx.fillRect(10 + Math.random()*128, 10 + Math.random()*128, 2, 2);
+    hiddenCtx.fillRect(16 + Math.random()*128, 12 + Math.random()*148, 2, 2);
   }
 
+  // 貼上攝影機處理影像
   if (!isBlank) {
     tempCtx.putImageData(processedImageData, 0, 0);
-    hiddenCtx.drawImage(tempCanvas, 20, 20, 108, 108);
+    hiddenCtx.drawImage(tempCanvas, 24, 20, 112, 112);
+    
+    // 核心：疊加 AI 生成影像 (擬像化)
+    if (aiImgObj && blendRatio > 0) {
+      hiddenCtx.globalAlpha = blendRatio;
+      // 混合模式：利用疊加或濾色產生神經融合感，第五層時完全取代
+      hiddenCtx.globalCompositeOperation = blendRatio >= 1 ? 'source-over' : 'screen';
+      hiddenCtx.drawImage(aiImgObj.img, 24, 20, 112, 112);
+      hiddenCtx.globalAlpha = 1.0;
+      hiddenCtx.globalCompositeOperation = 'source-over';
+    }
   }
 
+  // 底部文字標籤 (AI 提示詞或狀態)
+  hiddenCtx.fillStyle = 'rgba(0,0,0,0.7)';
+  hiddenCtx.font = 'bold 8px "Share Tech Mono"';
+  let label = isBlank ? "ANOMALY // NULL" : `C${cycle} // ${aiImgObj && blendRatio > 0 ? aiImgObj.prompt.substring(0, 16).toUpperCase() : 'OPTICAL_FEED'}`;
+  hiddenCtx.fillText(label, 24, 150);
+
+  // 膠帶
   hiddenCtx.save();
-  hiddenCtx.translate(74, 18); 
+  hiddenCtx.translate(80, 18); 
   hiddenCtx.rotate((Math.random() - 0.5) * 0.3); 
   hiddenCtx.shadowColor = 'rgba(0,0,0,0.4)';
   hiddenCtx.shadowBlur = 4;
@@ -403,6 +493,15 @@ function captureNextSector() {
 
   const isBlankAnomaly = Math.random() < 0.05;
   let imgData = null;
+  
+  // 計算目前的 Cycle 以及 AI 混合率
+  const currentCycle = Math.floor(currentIndex / TOTAL_TILES) + 1;
+  // 第1層(0%), 第2層(25%), 第3層(50%), 第4層(75%), 第5層(100%完全取代)
+  const blendRatio = (currentCycle - 1) * 0.25; 
+  let selectedAI = null;
+  if (aiImagePool.length > 0) {
+    selectedAI = aiImagePool[Math.floor(Math.random() * aiImagePool.length)];
+  }
 
   if (!isBlankAnomaly) {
     const minSize = Math.min(video.videoWidth, video.videoHeight);
@@ -445,7 +544,7 @@ function captureNextSector() {
     }
   }
 
-  const paperTex = createPaperTexture(imgData, isBlankAnomaly);
+  const paperTex = createPaperTexture(imgData, isBlankAnomaly, selectedAI, blendRatio, currentCycle);
   const mat = new THREE.MeshBasicMaterial({ map: paperTex, transparent: true, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(paperGeo, mat);
   
@@ -471,7 +570,6 @@ function captureNextSector() {
   totalActiveLayers++;
   currentIndex++;
 
-  const currentCycle = Math.floor((currentIndex - 1) / TOTAL_TILES) + 1;
   document.getElementById('ui-cycle').innerText = `${currentCycle} / ${MAX_CYCLES}`;
   document.getElementById('ui-progress').innerText = totalActiveLayers;
   
@@ -683,7 +781,7 @@ function addLog(m, color = "rgba(255,255,255,0.7)") {
   if(lb.children.length > 25) lb.lastChild.remove();
 }
 
-document.getElementById('btn-pause').onclick = () => {
+bindBtn('btn-pause', () => {
   isPaused = !isPaused;
   const btn = document.getElementById('btn-pause');
   
@@ -700,7 +798,7 @@ document.getElementById('btn-pause').onclick = () => {
     document.getElementById('ui-mode').innerText = MODE_NAMES[currentMode];
     document.getElementById('ui-mode').style.color = "#fff";
   }
-};
+});
 
 function setupKnob(id, callback) {
   const knob = document.getElementById(id);
@@ -726,7 +824,7 @@ function setupKnob(id, callback) {
 }
 
 setupKnob('knob-speed', (v) => { speedRatio = v; });
-document.getElementById('btn-wipe').onclick = () => { wipeBoard(); };
+bindBtn('btn-wipe', () => { wipeBoard(); });
 
 window.onresize = () => {
   camera.aspect = window.innerWidth / window.innerHeight;
