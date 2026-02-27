@@ -136,6 +136,7 @@
       CYCLE_LAYER: <span id="ui-cycle" style="color:#0f0">1 / 5</span><br>
       ACTIVE_STACKS: <span id="ui-progress">0</span><br>
       SCATTERED_DEBRIS: <span id="ui-scattered">0</span><br>
+      AI_DATABANK: <span id="ui-aicache" style="color:#0ff">0</span><br>
       MODE: <span id="ui-mode">WAITING</span>
     </div>
   </div>
@@ -271,7 +272,7 @@ updatePanelUI(); // 初始執行
 // 異步載入 AI 影像 (背景執行不卡頓)
 async function initAIFetcher() {
   const fetchNext = async () => {
-    if(aiImagePool.length < 10) {
+    if(aiImagePool.length < 15) {
       try {
         const prompt = AI_PROMPTS[Math.floor(Math.random() * AI_PROMPTS.length)];
         const seed = Math.floor(Math.random() * 99999);
@@ -284,9 +285,15 @@ async function initAIFetcher() {
           img.src = url;
         });
         aiImagePool.push({ img, prompt, seed });
-      } catch(e) {}
+        
+        // 新增：成功抓取 AI 生成圖的日誌回饋與 UI 更新
+        addLog(`[AI_NODE] ${prompt.substring(0, 12).toUpperCase()}... CACHED.`, "rgba(100,255,200,0.6)");
+        document.getElementById('ui-aicache').innerText = aiImagePool.length;
+      } catch(e) {
+        addLog(`[AI_NODE] FETCH_FAILED. RETRYING...`, "rgba(255,100,100,0.5)");
+      }
     }
-    setTimeout(fetchNext, 3000 + Math.random() * 3000);
+    setTimeout(fetchNext, 2500 + Math.random() * 2000);
   };
   for(let i=0; i<4; i++) fetchNext(); // 啟動4個併發抓取器
 }
@@ -432,18 +439,18 @@ function createPaperTexture(processedImageData, isBlank, aiImgObj, blendRatio, c
   }
 
   // 貼上攝影機處理影像
-  if (!isBlank) {
-    tempCtx.putImageData(processedImageData, 0, 0);
-    hiddenCtx.drawImage(tempCanvas, 24, 20, 112, 112);
-    
-    // 核心：疊加 AI 生成影像 (擬像化)
-    if (aiImgObj && blendRatio > 0) {
-      hiddenCtx.globalAlpha = blendRatio;
-      // 混合模式：利用疊加或濾色產生神經融合感，第五層時完全取代
-      hiddenCtx.globalCompositeOperation = blendRatio >= 1 ? 'source-over' : 'screen';
-      hiddenCtx.drawImage(aiImgObj.img, 24, 20, 112, 112);
-      hiddenCtx.globalAlpha = 1.0;
-      hiddenCtx.globalCompositeOperation = 'source-over';
+        hiddenCtx.drawImage(aiImgObj.img, 24, 20, 112, 112);
+        hiddenCtx.globalAlpha = 1.0;
+        hiddenCtx.globalCompositeOperation = 'source-over';
+        
+        // 消耗一張 AI 庫存，保持數據庫流動更新
+        if(Math.random() > 0.7 && aiImagePool.length > 5) {
+           aiImagePool.shift(); 
+           document.getElementById('ui-aicache').innerText = aiImagePool.length;
+        }
+      } catch(e) {
+        // 避免跨域或載入錯誤時畫布崩潰
+      }
     }
   }
 
