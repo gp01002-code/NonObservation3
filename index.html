@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-  <title>SELF_OBSERVER :: v60.0 DELICATE_PEEL_ARCHIVE</title>
+  <title>SELF_OBSERVER :: v61.0 RESPONSIVE_DELICATE_ARCHIVE</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -23,17 +23,17 @@
       background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.95) 100%);
     }
 
-    /* 物理互動光環：變得更遲緩、柔和 */
+    /* 物理互動光環：反應變快 */
     #cur {
-      position:fixed; width:60px; height:60px; border:1px dashed rgba(255,255,255,0.2); border-radius:50%;
+      position:fixed; width:50px; height:50px; border:1px dashed rgba(255,255,255,0.3); border-radius:50%;
       z-index:700; pointer-events:none; transform:translate(-50%,-50%);
-      transition: border-color 0.8s, background 0.8s, width 0.8s, height 0.8s;
+      transition: border-color 0.3s, background 0.3s, width 0.3s, height 0.3s;
       box-shadow: 0 0 20px rgba(255,255,255,0);
     }
     #cur.active {
-      width:70px; height:70px; border-color:rgba(255,255,255,0.4); border-style: solid;
-      background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
-      box-shadow: 0 0 20px rgba(255,255,255,0.1);
+      width:70px; height:70px; border-color:rgba(255,255,255,0.5); border-style: solid;
+      background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+      box-shadow: 0 0 20px rgba(255,255,255,0.2);
     }
 
     #container{width:100vw;height:100vh; cursor:crosshair;}
@@ -87,7 +87,7 @@
 <body>
 
 <div id="loading-overlay">
-  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_DELICATE_PEEL...</div>
+  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_RESPONSIVE_ENGINE...</div>
   <div id="load-status" class="text-[10px] text-gray-500 font-mono">CALIBRATING_SENSITIVITY</div>
 </div>
 
@@ -123,14 +123,14 @@
   </div>
 </div>
 
-<div id="status-bar">v60.0_DELICATE_PEEL_ARCHIVE // GENTLE_INTERVENTION_REQUIRED</div>
+<div id="status-bar">v61.0_RESPONSIVE_DELICATE_ARCHIVE // OPTIMIZED_KINETICS</div>
 
 <div id="container"></div>
 
 <script>
 /**
- * SELF_OBSERVER v60.0 - Delicate Peel Archive
- * 核心：極低反應的掀紙互動、紙張散落不消失的桌面物理。
+ * SELF_OBSERVER v61.0 - Responsive Delicate Archive
+ * 核心優化：提升追蹤與手勢靈敏度、降低剝離門檻、稍微加快散落動畫速度。
  */
 
 let video, hiddenCanvas, hiddenCtx, tempCanvas, tempCtx;
@@ -174,9 +174,10 @@ window.addEventListener('touchmove', e => {
   updateMouse(e.touches[0].clientX, e.touches[0].clientY);
 }, {passive: false});
 
+// 閒置 0.5 秒就取消游標的啟動狀態 (比上一版快)
 setInterval(() => {
-  if(Date.now() - lastMouseTime > 800) document.getElementById('cur').classList.remove('active');
-}, 800);
+  if(Date.now() - lastMouseTime > 500) document.getElementById('cur').classList.remove('active');
+}, 500);
 
 async function init() {
   video = document.getElementById('video');
@@ -215,8 +216,8 @@ async function init() {
   document.getElementById('loading-overlay').style.opacity = '0';
   setTimeout(() => document.getElementById('loading-overlay').remove(), 1000);
 
-  addLog("DESKTOP_PHYSICS_ENGINE INITIALIZED", "#fff");
-  addLog("AWAITING_DELICATE_INTERVENTION...");
+  addLog("RESPONSIVE_PHYSICS_ENGINE INITIALIZED", "#fff");
+  addLog("AWAITING_INTERVENTION...");
   
   animate();
 }
@@ -282,7 +283,7 @@ function createBaseGrid() {
 
 function createPaperTexture(processedImageData, isBlank) {
   if (isBlank) {
-    hiddenCtx.fillStyle = '#999999'; // 空白便利貼的淡灰
+    hiddenCtx.fillStyle = '#999999'; 
     hiddenCtx.fillRect(0, 0, 128, 128);
     for(let i=0; i<400; i++) {
       hiddenCtx.fillStyle = `rgba(0,0,0,${Math.random()*0.05})`;
@@ -318,15 +319,14 @@ function captureNextSector() {
   const cell = baseTiles[cellIndex];
   const stack = cellStacks[cellIndex];
 
-  // 最多 6 層堆疊，超過則淘汰到底部廢棄紙張區 (但這次不刪除，而是變成散落紙張)
   if (stack.length >= 6) {
     const old = stack.shift();
     totalActiveLayers--;
     
-    // 將舊紙張滑落到桌邊
-    old.userData.vx = (Math.random()-0.5)*0.03;
-    old.userData.vy = (Math.random()-0.5)*0.03;
-    old.userData.vz = 0.05;
+    // 將多餘舊紙張淘汰到散落區
+    old.userData.vx = (Math.random()-0.5)*0.04;
+    old.userData.vy = (Math.random()-0.5)*0.04;
+    old.userData.vz = 0.08;
     blownPapers.push(old);
   }
 
@@ -430,7 +430,7 @@ function wipeBoard() {
   });
   blownPapers.length = 0;
   totalActiveLayers = 0;
-  addLog("DESK_CLEARED_MANUALLY.", "#f00");
+  addLog("DESK_CLEARED.", "#f00");
 }
 
 function animate() {
@@ -447,8 +447,8 @@ function animate() {
     lastCaptureTime = Date.now();
   }
 
-  // 1. 動態追蹤：極度遲鈍的反應
-  if (Date.now() - lastMouseTime > 2000) {
+  // 1. 動態追蹤：縮短攝影機接管的延遲，只要手/滑鼠離開 1 秒就啟動
+  if (Date.now() - lastMouseTime > 1000) {
     const c = document.getElementById('mc');
     if(video && video.readyState >= 2){
       const ctx = c.getContext('2d');
@@ -459,13 +459,14 @@ function animate() {
         let tx=0, ty=0, count=0;
         for(let i=0; i<curr.data.length; i+=4){
           const diff = (Math.abs(curr.data[i]-prevFrame.data[i]) + Math.abs(curr.data[i+1]-prevFrame.data[i+1]) + Math.abs(curr.data[i+2]-prevFrame.data[i+2]))/3;
-          if(diff > 40){ // 降低敏感度
+          // 增加對身體微小動作的靈敏度
+          if(diff > 30){ 
             const idx = i/4; 
             tx += idx % c.width; ty += Math.floor(idx / c.width); 
             count++; 
           }
         }
-        if(count > 25){ // 需要更大的動作才能觸發
+        if(count > 15){ 
           let nx = 1.0 - (tx/count/c.width); 
           vs.tx = nx * window.innerWidth; 
           vs.ty = (ty/count/c.height) * window.innerHeight;
@@ -479,15 +480,15 @@ function animate() {
     }
   }
 
-  // 光環座標平滑化：極度緩慢跟隨
-  vs.cx += (vs.tx - vs.cx) * 0.05;
-  vs.cy += (vs.ty - vs.cy) * 0.05;
+  // 光環座標平滑化：加快跟隨速度 (0.15)
+  vs.cx += (vs.tx - vs.cx) * 0.15;
+  vs.cy += (vs.ty - vs.cy) * 0.15;
   document.getElementById('cur').style.left = vs.cx + 'px';
   document.getElementById('cur').style.top = vs.cy + 'px';
 
   let currentCursorVel = Math.sqrt(mouseVx*mouseVx + mouseVy*mouseVy);
-  mouseVx *= 0.5; // 極速衰減滑鼠速度
-  mouseVy *= 0.5;
+  mouseVx *= 0.7; // 稍微保留滑動的慣性
+  mouseVy *= 0.7;
 
   const vFov = camera.fov * Math.PI / 180;
   const vHeight = 2 * Math.tan(vFov / 2) * camera.position.z;
@@ -499,9 +500,10 @@ function animate() {
   const wy = (-((vs.cy / window.innerHeight) * 2 - 1) * (vHeight / 2)) / scale;
   
   const blowRadius = 2.0; 
-  const PEEL_THRESHOLD = 2.0; // 需要累積更久才能掀開
+  // 大幅降低門檻：只要累積 0.8 單位就能剝開，讓反應變得順暢
+  const PEEL_THRESHOLD = 0.8; 
 
-  // 2. 極度輕柔的掀紙引擎 (Hover-to-Peel)
+  // 2. 靈敏但輕柔的掀紙引擎
   for(let i=0; i<TOTAL_TILES; i++) {
     const cell = baseTiles[i];
     const stack = cellStacks[i];
@@ -513,43 +515,41 @@ function animate() {
       const dist = Math.sqrt(dx*dx + dy*dy);
       
       if (dist < blowRadius) {
-        // 核心改變：移動越快，穩定度越低，越無法掀開紙張 (必須慢慢看)
-        let hoverStability = Math.max(0, 1.0 - currentCursorVel * 0.1);
-        cell.windCharge += delta * hoverStability * (1.0 - dist/blowRadius);
+        // 放寬對移動速度的懲罰：即使手在微微滑動，依然可以累積掀開的能量
+        let hoverStability = Math.max(0.2, 1.0 - currentCursorVel * 0.05);
+        cell.windCharge += delta * hoverStability * (1.5 - dist/blowRadius);
       } else {
-        cell.windCharge = Math.max(0, cell.windCharge - delta * 0.5);
+        cell.windCharge = Math.max(0, cell.windCharge - delta * 0.8);
       }
 
       const chargeRatio = Math.min(1, cell.windCharge / PEEL_THRESHOLD);
 
-      // 顫動預兆 (非常輕微的翹起)
+      // 顫動預兆
       if (chargeRatio > 0 && chargeRatio < 1.0) {
         topPaper.userData.targetZ = topPaper.userData.baseZ + chargeRatio * 0.2;
-        topPaper.userData.targetRotX = Math.sin(time * 20 + topPaper.userData.noiseSeed) * 0.05 * chargeRatio;
+        topPaper.userData.targetRotX = Math.sin(time * 25 + topPaper.userData.noiseSeed) * 0.08 * chargeRatio;
       } else {
         topPaper.userData.targetZ = topPaper.userData.baseZ;
         topPaper.userData.targetRotX = 0;
       }
 
-      // --- 突破臨界：輕柔剝離並散落周圍 ---
+      // --- 突破臨界：順暢剝離 ---
       if (cell.windCharge >= PEEL_THRESHOLD) {
         stack.pop(); 
         totalActiveLayers--;
         document.getElementById('ui-progress').innerText = totalActiveLayers;
 
-        // 賦予極弱的推移力量，讓它只散落在原位附近
-        topPaper.userData.vx = -(dx / dist) * 0.01 + (Math.random()-0.5)*0.01;
-        topPaper.userData.vy = -(dy / dist) * 0.01 + (Math.random()-0.5)*0.01;
-        topPaper.userData.vz = 0.06; // 輕微抬起
+        // 稍微增強推出去的力道，讓它確實離開主疊，掉到旁邊
+        topPaper.userData.vx = -(dx / dist) * 0.025 + (Math.random()-0.5)*0.02;
+        topPaper.userData.vy = -(dy / dist) * 0.025 + (Math.random()-0.5)*0.02;
+        topPaper.userData.vz = 0.08; // 微微彈起
         
-        topPaper.userData.rvX = (Math.random() - 0.5) * 0.02; 
-        topPaper.userData.rvY = (Math.random() - 0.5) * 0.02;
-        topPaper.userData.rvZ = (Math.random() - 0.5) * 0.05;
+        topPaper.userData.rvX = (Math.random() - 0.5) * 0.03; 
+        topPaper.userData.rvY = (Math.random() - 0.5) * 0.03;
+        topPaper.userData.rvZ = (Math.random() - 0.5) * 0.08;
 
         blownPapers.push(topPaper);
         cell.windCharge = 0; 
-        
-        if(Math.random() > 0.8) addLog(`LAYER_DELICATELY_PEELED`, "rgba(255,255,255,0.4)");
       }
     }
 
@@ -558,30 +558,29 @@ function animate() {
       let rX = u.targetRotX; let tZ = u.targetZ;
       if (idx !== stack.length - 1) { rX = 0; tZ = u.baseZ; }
 
-      paper.rotation.x += (rX - paper.rotation.x) * 0.1;
-      paper.rotation.y += (u.targetRotY - paper.rotation.y) * 0.1;
+      paper.rotation.x += (rX - paper.rotation.x) * 0.15;
+      paper.rotation.y += (u.targetRotY - paper.rotation.y) * 0.15;
       paper.rotation.z = u.baseTilt; 
-      paper.position.z += (tZ - paper.position.z) * 0.1;
+      paper.position.z += (tZ - paper.position.z) * 0.15;
     });
   }
 
-  // 3. 散落桌面的相紙 (不消失，留在底層)
+  // 3. 桌邊散落動態優化
   for(let i=0; i<blownPapers.length; i++) {
     const p = blownPapers[i];
     const u = p.userData;
     
-    // 讓散落的紙張落到 Z=-0.2 (剛好在網格底層下方，但高於桌面)
+    // 稍微增加重力，讓它更快落到桌面上，不會在空中漂浮太久
     if (p.position.z > u.baseZ - 0.2) {
-      u.vz -= 0.003; // 極輕的重力
+      u.vz -= 0.006; 
     } else {
-      // 落地後的高摩擦力，紙張幾乎停在原地附近
       p.position.z = u.baseZ - 0.2;
       u.vz = 0;
       u.vx *= 0.8; 
       u.vy *= 0.8;
       u.rvX *= 0.8;
       u.rvY *= 0.8;
-      u.rvZ *= 0.9;
+      u.rvZ *= 0.85;
     }
 
     p.position.x += u.vx;
@@ -592,7 +591,7 @@ function animate() {
     p.rotation.z += u.rvZ;
   }
   
-  // 限制散落相紙總數，防止效能崩潰 (上限60張，超過則淘汰最舊的)
+  // 維持效能上限 60 張
   document.getElementById('ui-scattered').innerText = blownPapers.length;
   if (blownPapers.length > 60) {
     const oldest = blownPapers.shift();
