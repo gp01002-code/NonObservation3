@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-  <title>SELF_OBSERVER :: v64.0 REFINED_DESKTOP_ARCHIVE</title>
+  <title>SELF_OBSERVER :: v65.2 AI_SIMULACRA_ARCHIVE</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -86,16 +86,17 @@
       transition: transform 0.4s;
     }
 
+    /* 手機版適配 */
     @media (max-width: 768px) {
       #status-bar { left: 20px; }
       #controls { right: 15px; bottom: 15px; transform: scale(0.85); transform-origin: bottom right; }
       #sidebar { top: 60px; width: 200px; }
     }
 
-    /* 橫式手機適配 (避免控制列超出螢幕) */
+    /* 橫式手機適配 */
     @media (max-height: 500px) and (orientation: landscape) {
       #controls {
-        flex-direction: row; /* 橫向排列 */
+        flex-direction: row; 
         align-items: flex-end;
         bottom: 15px;
         right: env(safe-area-inset-right, 20px);
@@ -116,15 +117,15 @@
 <body>
 
 <div id="loading-overlay">
-  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_REFINED_ARCHIVE...</div>
-  <div id="load-status" class="text-[10px] text-gray-500 font-mono">REMOVING_BASE_ARTIFACTS</div>
+  <div class="pulse text-xs tracking-[0.5em] mb-4">INITIALIZING_SIMULACRA_ENGINE...</div>
+  <div id="load-status" class="text-[10px] text-gray-500 font-mono">ESTABLISHING_NEURAL_UPLINK</div>
 </div>
 
 <div id="crt"></div>
 <div id="vignette"></div>
 <div id="cur"></div>
 
-<!-- 新增：側邊欄收納開關 -->
+<!-- 側邊欄收納開關 -->
 <button id="btn-toggle-panel">[-] HIDE_LOG</button>
 
 <div id="sidebar">
@@ -161,14 +162,14 @@
   </div>
 </div>
 
-<div id="status-bar">v65.0_AI_SIMULACRA_ARCHIVE // CYCLE_BASED_GENERATION</div>
+<div id="status-bar">v65.2_AI_SIMULACRA_ARCHIVE // SUBJECT_RECONSTRUCTION // AUTO-PURGE_AT_LAYER_5</div>
 
 <div id="container"></div>
 
 <script>
 /**
- * SELF_OBSERVER v65.0
- * 新增：拍立得視覺 (Polaroid Aesthetic)、AI 生成影像異步載入、隨週期遞增的 AI 覆蓋率 (純粹擬像)。
+ * SELF_OBSERVER v65.2 (穩定修復版)
+ * 核心：AI 異步生成擬像化、5層週期演化、完美跨裝置適配。
  */
 
 let video, hiddenCanvas, hiddenCtx, tempCanvas, tempCtx;
@@ -208,7 +209,7 @@ let lastMouseTime = 0;
 
 const MODE_NAMES = ["TOPOLOGICAL_EDGE", "DITHER_MATRIX", "THRESHOLD_SLICE", "NEURAL_NOISE", "QUANTIZED_PIXEL"];
 
-// 拍立得幾何體比例 (稍微拉長)
+// 拍立得幾何體比例
 const paperGeo = new THREE.PlaneBufferGeometry(0.85, 0.95);
 const baseGeo = new THREE.PlaneBufferGeometry(0.7, 0.8);
 
@@ -230,7 +231,7 @@ setInterval(() => {
   if(Date.now() - lastMouseTime > 500) document.getElementById('cur').classList.remove('active');
 }, 500);
 
-// 解決 iOS 手機按鈕 hover 需要點兩下的問題，並整合 Touch/Click
+// 解決 iOS 手機按鈕點擊問題
 function bindBtn(id, callback) {
   const el = document.getElementById(id);
   if(!el) return;
@@ -267,9 +268,13 @@ const updatePanelUI = () => {
     stBar.style.transform = window.innerWidth > 768 ? 'translateX(-240px)' : 'translateX(-10px)';
   }
 };
-updatePanelUI(); // 初始執行
 
-// 異步載入 AI 影像 (背景執行不卡頓)
+bindBtn('btn-toggle-panel', () => {
+  panelVisible = !panelVisible;
+  updatePanelUI();
+});
+
+// 異步載入 AI 影像
 async function initAIFetcher() {
   const fetchNext = async () => {
     if(aiImagePool.length < 15) {
@@ -286,22 +291,17 @@ async function initAIFetcher() {
         });
         aiImagePool.push({ img, prompt, seed });
         
-        // 新增：成功抓取 AI 生成圖的日誌回饋與 UI 更新
+        // 成功抓取的視覺回饋
         addLog(`[AI_NODE] ${prompt.substring(0, 12).toUpperCase()}... CACHED.`, "rgba(100,255,200,0.6)");
         document.getElementById('ui-aicache').innerText = aiImagePool.length;
       } catch(e) {
-        addLog(`[AI_NODE] FETCH_FAILED. RETRYING...`, "rgba(255,100,100,0.5)");
+        // 抓取失敗靜默處理，等待下一次迴圈
       }
     }
     setTimeout(fetchNext, 2500 + Math.random() * 2000);
   };
   for(let i=0; i<4; i++) fetchNext(); // 啟動4個併發抓取器
 }
-
-bindBtn('btn-toggle-panel', () => {
-  panelVisible = !panelVisible;
-  updatePanelUI();
-});
 
 function calculateGridLayout() {
   const aspect = window.innerWidth / window.innerHeight;
@@ -311,6 +311,7 @@ function calculateGridLayout() {
 }
 
 async function init() {
+  updatePanelUI(); // 初始化面板狀態
   video = document.getElementById('video');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 640 }, audio: false });
@@ -321,10 +322,10 @@ async function init() {
   }
 
   calculateGridLayout();
-  initAIFetcher();
+  initAIFetcher(); // 啟動 AI 抓取
 
   hiddenCanvas = document.createElement('canvas');
-  hiddenCanvas.width = 160; hiddenCanvas.height = 180; // 增加高度以容納拍立得文字與陰影
+  hiddenCanvas.width = 160; hiddenCanvas.height = 180; 
   hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
 
   tempCanvas = document.createElement('canvas');
@@ -349,7 +350,7 @@ async function init() {
   document.getElementById('loading-overlay').style.opacity = '0';
   setTimeout(() => document.getElementById('loading-overlay').remove(), 1000);
 
-  addLog("DESKTOP_UI REFINED", "#fff");
+  addLog("SIMULACRA_ARCHIVE_READY", "#fff");
   
   animate();
 }
@@ -396,8 +397,7 @@ function createBaseGrid() {
     const x = i % COLS;
     const y = Math.floor(i / COLS);
 
-    // 核心修正：將虛擬底板設為 invisible，徹底解決下方透出的黑塊問題
-    const mat = new THREE.MeshBasicMaterial({ visible: false });
+    const mat = new THREE.MeshBasicMaterial({ visible: false }); // 隱藏底板避免黑影
     const mesh = new THREE.Mesh(baseGeo, mat);
     
     const baseX = startX + x * step;
@@ -420,13 +420,13 @@ function createBaseGrid() {
 function createPaperTexture(processedImageData, isBlank, aiImgObj, blendRatio, cycle) {
   hiddenCtx.clearRect(0, 0, 160, 180);
 
-  // 陰影
+  // 實體陰影
   hiddenCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
   hiddenCtx.shadowBlur = 12;
   hiddenCtx.shadowOffsetX = 3;
   hiddenCtx.shadowOffsetY = 6;
   
-  // 紙張底色
+  // 相紙底色
   hiddenCtx.fillStyle = isBlank ? '#999999' : '#f2f2f2';
   hiddenCtx.fillRect(16, 12, 128, 148);
 
@@ -438,23 +438,32 @@ function createPaperTexture(processedImageData, isBlank, aiImgObj, blendRatio, c
     hiddenCtx.fillRect(16 + Math.random()*128, 12 + Math.random()*148, 2, 2);
   }
 
-  // 貼上攝影機處理影像
+  // 貼上影像
+  if (!isBlank) {
+    tempCtx.putImageData(processedImageData, 0, 0);
+    hiddenCtx.drawImage(tempCanvas, 24, 20, 112, 112);
+    
+    // 疊加 AI 擬像
+    if (aiImgObj && blendRatio > 0) {
+      try {
+        hiddenCtx.globalAlpha = blendRatio;
+        hiddenCtx.globalCompositeOperation = blendRatio >= 1 ? 'source-over' : 'screen';
         hiddenCtx.drawImage(aiImgObj.img, 24, 20, 112, 112);
         hiddenCtx.globalAlpha = 1.0;
         hiddenCtx.globalCompositeOperation = 'source-over';
         
-        // 消耗一張 AI 庫存，保持數據庫流動更新
+        // 消耗庫存
         if(Math.random() > 0.7 && aiImagePool.length > 5) {
            aiImagePool.shift(); 
            document.getElementById('ui-aicache').innerText = aiImagePool.length;
         }
-      } catch(e) {
-        // 避免跨域或載入錯誤時畫布崩潰
+      } catch (e) {
+        // 防止未加載完成的圖片導致崩潰
       }
     }
   }
 
-  // 底部文字標籤 (AI 提示詞或狀態)
+  // 拍立得文字標籤
   hiddenCtx.fillStyle = 'rgba(0,0,0,0.7)';
   hiddenCtx.font = 'bold 8px "Share Tech Mono"';
   let label = isBlank ? "ANOMALY // NULL" : `C${cycle} // ${aiImgObj && blendRatio > 0 ? aiImgObj.prompt.substring(0, 16).toUpperCase() : 'OPTICAL_FEED'}`;
@@ -479,6 +488,7 @@ function createPaperTexture(processedImageData, isBlank, aiImgObj, blendRatio, c
 function captureNextSector() {
   if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+  // 5 層週期重置
   if (currentIndex >= TOTAL_TILES * MAX_CYCLES) {
     addLog(`MAX_CAPACITY (${MAX_CYCLES}_LAYERS) REACHED. AUTO-PURGING.`, "#f00");
     wipeBoard();
@@ -501,10 +511,10 @@ function captureNextSector() {
   const isBlankAnomaly = Math.random() < 0.05;
   let imgData = null;
   
-  // 計算目前的 Cycle 以及 AI 混合率
+  // 計算當前週期與 AI 混合率
   const currentCycle = Math.floor(currentIndex / TOTAL_TILES) + 1;
-  // 第1層(0%), 第2層(25%), 第3層(50%), 第4層(75%), 第5層(100%完全取代)
   const blendRatio = (currentCycle - 1) * 0.25; 
+  
   let selectedAI = null;
   if (aiImagePool.length > 0) {
     selectedAI = aiImagePool[Math.floor(Math.random() * aiImagePool.length)];
@@ -522,6 +532,7 @@ function captureNextSector() {
     const data = imgData.data;
     const copy = new Uint8ClampedArray(data);
 
+    // AI 影像濾鏡處理
     for (let i = 0; i < data.length; i += 4) {
       let r = data[i], g = data[i + 1], b = data[i + 2];
       let lum = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -629,6 +640,7 @@ function animate() {
     lastCaptureTime = Date.now();
   }
 
+  // 動態追蹤
   if (Date.now() - lastMouseTime > 1000) {
     const c = document.getElementById('mc');
     if(video && video.readyState >= 2){
